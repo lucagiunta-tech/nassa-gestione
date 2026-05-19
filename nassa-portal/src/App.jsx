@@ -4876,7 +4876,8 @@ function ClientApprovalView({ slug }) {
           </div>
         )}
 
-        {portalSettings.showFeed && <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        {portalSettings.showFeed && (
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
           {feed.map((post, i) => {
             const img    = post.immagineBase64 || post.immagineUrl;
             const isApp  = post.stato === "approvato";
@@ -5003,7 +5004,8 @@ function ClientApprovalView({ slug }) {
               </div>
             );
           })}
-        </div>}
+        </div>
+        )}
 
         {portalSettings.showFeed && feed.length > 0 && (
           <div style={{textAlign:"center",padding:"28px 0 8px",color:C.muted,fontSize:11,lineHeight:1.8}}>

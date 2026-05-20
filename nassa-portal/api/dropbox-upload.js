@@ -13,11 +13,12 @@ async function getToken() {
   const res  = await fetch("https://api.dropbox.com/oauth2/token", {
     method:  "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body:    new URLSearchParams({
-      grant_type:    "refresh_token",
-      refresh_token: DROPBOX_REFRESH_TOKEN,
-      client_id:     DROPBOX_APP_KEY,
-    }),
+    body: new URLSearchParams({
+  grant_type:    "refresh_token",
+  refresh_token: DROPBOX_REFRESH_TOKEN,
+  client_id:     DROPBOX_APP_KEY,
+  client_secret: process.env.DROPBOX_APP_SECRET,  // ← ADD THIS LINE
+}),
   });
   const data     = await res.json();
   if (!data.access_token) throw new Error("Token refresh failed: " + JSON.stringify(data));

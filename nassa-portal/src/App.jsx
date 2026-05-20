@@ -305,8 +305,8 @@ async function uploadToDropbox(file, clientName, subfolder = "Images") {
 
 /* ─── META / FACEBOOK & INSTAGRAM CONFIG ─────────────────── */
 // Get these from https://developers.facebook.com → Your App → Settings > Basic
-const META_APP_ID     = "YOUR_META_APP_ID";     // App ID (public, safe in client)
-const META_APP_SECRET = "YOUR_META_APP_SECRET"; // App Secret (team-internal app only)
+const META_APP_ID     = "1543498264065807";     // App ID (public, safe in client)
+const META_APP_SECRET = "e2f69284d7f2ea71a3752596d19e8921"; // App Secret (team-internal app only)
 const META_API        = "https://graph.facebook.com/v19.0";
 const META_SCOPES     = [
   "pages_manage_posts",

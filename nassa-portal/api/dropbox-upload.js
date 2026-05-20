@@ -104,7 +104,7 @@ export default async function handler(req, res) {
     }).catch(() => {});
 
     return res.status(200).json({
-      url:      publicUrl.replace("?dl=0", "?raw=1"),
+      url:      publicUrl.replace("dl=0", "raw=1"),
       path:     uploadData.path_lower,
       name:     uploadData.name,
     });

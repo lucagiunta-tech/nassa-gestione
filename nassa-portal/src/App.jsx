@@ -221,8 +221,8 @@ const SB_HEADERS = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content
 // 2. Under Permissions, enable: files.content.write, files.content.read, sharing.write
 // 3. Under Settings, generate an access token (short-lived) then run the OAuth flow
 //    once to get a refresh_token (see README or use the Dropbox token generator tool)
-const DROPBOX_APP_KEY       = "YOUR_APP_KEY";        // from App Console → Settings
-const DROPBOX_REFRESH_TOKEN = "YOUR_REFRESH_TOKEN";  // long-lived refresh token
+const DROPBOX_APP_KEY       = "aahllr0ewvn0hfs";        // from App Console → Settings
+const DROPBOX_REFRESH_TOKEN = "lMlulzrCYsQAAAAAAAAAAThXdPFe-QpntRiZGCrvOp5wmjfQcWkDQc_FtlDMS0W2";  // long-lived refresh token
 const DROPBOX_FOLDER        = "/NassaPortal";         // root folder in your Dropbox
 
 // Internal token cache — auto-refreshes before expiry
@@ -340,8 +340,8 @@ async function uploadToDropbox(file, clientName, subfolder = "Images") {
 
 /* ─── META / FACEBOOK & INSTAGRAM CONFIG ─────────────────── */
 // Get these from https://developers.facebook.com → Your App → Settings > Basic
-const META_APP_ID     = "YOUR_META_APP_ID";     // App ID (public, safe in client)
-const META_APP_SECRET = "YOUR_META_APP_SECRET"; // App Secret (team-internal app only)
+const META_APP_ID     = "1543498264065807";     // App ID (public, safe in client)
+const META_APP_SECRET = "e2f69284d7f2ea71a3752596d19e8921"; // App Secret (team-internal app only)
 const META_API        = "https://graph.facebook.com/v19.0";
 const META_SCOPES     = [
   "pages_manage_posts",

@@ -361,7 +361,8 @@ function openMetaOAuth(onPages) {
   const redirectUri = encodeURIComponent("https://nassa-gestione.vercel.app/api/meta-oauth");
   const url =
     `https://www.facebook.com/dialog/oauth?client_id=${META_APP_ID}` +
-    `&redirect_uri=${redirectUri}&scope=${META_SCOPES}&response_type=code`;
+    `&redirect_uri=${redirectUri}&scope=${META_SCOPES}&response_type=code` +
+    `&auth_type=rerequest`;  // forces full flow, bypasses "Ricollega" cached screen
   const popup = window.open(url, "MetaLogin", "width=620,height=720,left=200,top=80");
 
   function handleMsg(e) {

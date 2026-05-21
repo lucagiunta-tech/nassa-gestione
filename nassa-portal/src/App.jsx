@@ -314,7 +314,7 @@ const META_SCOPES     = [
   "pages_show_list",
   "instagram_content_publish",
   "instagram_basic",
-  "instagram_business_basic",
+  // instagram_business_basic is NOT valid for facebook.com/dialog/oauth
 ].join(",");
 
 /* ── OAuth popup ─────────────────────────────────────────── */

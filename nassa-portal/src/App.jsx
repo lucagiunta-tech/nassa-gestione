@@ -357,8 +357,8 @@ async function metaGetPages(userToken) {
 
 /* ── OAuth popup (implicit grant) ───────────────────────── */
 
-function openMetaOAuth(onToken) {
-  // Use server-side code flow (implicit token flow is deprecated for business apps)
+function openMetaOAuth(onPages) {
+  // Server-side code flow — server fetches pages and posts them back
   const redirectUri = encodeURIComponent("https://nassa-gestione.vercel.app/api/meta-oauth");
   const url =
     `https://www.facebook.com/dialog/oauth?client_id=${META_APP_ID}` +
@@ -366,10 +366,10 @@ function openMetaOAuth(onToken) {
   const popup = window.open(url, "MetaLogin", "width=620,height=720,left=200,top=80");
 
   function handleMsg(e) {
-    if (e.data?.type === "META_OAUTH_TOKEN") {
+    if (e.data?.type === "META_OAUTH_PAGES") {
       window.removeEventListener("message", handleMsg);
       clearInterval(poll);
-      onToken(e.data.token); // already long-lived, exchanged server-side
+      onPages(e.data.pages); // array of pages with tokens already included
     }
     if (e.data?.type === "META_OAUTH_ERROR") {
       window.removeEventListener("message", handleMsg);
@@ -5293,13 +5293,10 @@ function MetaConnectionSection({ slug }) {
 
   function startOAuth() {
     setConnecting(true);
-    openMetaOAuth(async (longToken) => {
+    openMetaOAuth(async (pages) => {
       try {
-        const pagesRes = await metaGetPages(longToken);
-        console.log("Meta pages response:", JSON.stringify(pagesRes));
-        if (pagesRes.error) throw new Error(pagesRes.error.message);
-        const pages = pagesRes.data || [];
-        setPagesData({ userToken: longToken, pages });
+        console.log("Meta pages received:", JSON.stringify(pages));
+        setPagesData({ pages: pages || [] });
       } catch (e) {
         alert("Errore connessione Meta: " + e.message);
       } finally {
@@ -5310,10 +5307,11 @@ function MetaConnectionSection({ slug }) {
 
   async function selectPage(page) {
     const igAcc = page.instagram_business_account;
+    // page.access_token is already a long-lived page token from the server
     const updated = {
       ...meta,
       fb: { pageId: page.id, token: page.access_token, name: page.name, connectedAt: Date.now() },
-      ...(igAcc ? { ig: { userId: igAcc.id, token: page.access_token, name: igAcc.username, pic: igAcc.profile_picture_url, connectedAt: Date.now() } } : {}),
+      ...(igAcc ? { ig: { userId: igAcc.id, token: page.access_token, name: igAcc.username || igAcc.name, pic: igAcc.profile_picture_url || "", connectedAt: Date.now() } } : {}),
     };
     await saveMeta(updated);
     setPagesData(null);

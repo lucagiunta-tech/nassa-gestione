@@ -330,12 +330,29 @@ async function metaExchangeLongLived(shortToken) {
 
 /** Get all FB Pages (+ linked IG accounts) the user manages */
 async function metaGetPages(userToken) {
+  // Step 1: get all pages the user manages
   const r = await fetch(
-    `${META_API}/me/accounts?fields=id,name,access_token,` +
-    `instagram_business_account{id,name,username,profile_picture_url}` +
+    `${META_API}/me/accounts?fields=id,name,access_token&limit=100` +
     `&access_token=${encodeURIComponent(userToken)}`
   );
-  return r.json(); // { data: [ { id, name, access_token, instagram_business_account } ] }
+  const data = await r.json();
+  if (!data.data || data.data.length === 0) return data;
+
+  // Step 2: for each page, check if it has a linked IG Business account
+  const pages = await Promise.all(data.data.map(async (page) => {
+    try {
+      const igR = await fetch(
+        `${META_API}/${page.id}?fields=instagram_business_account{id,name,username,profile_picture_url}` +
+        `&access_token=${encodeURIComponent(page.access_token)}`
+      );
+      const igD = await igR.json();
+      return { ...page, instagram_business_account: igD.instagram_business_account || null };
+    } catch {
+      return { ...page, instagram_business_account: null };
+    }
+  }));
+
+  return { ...data, data: pages };
 }
 
 /* ── OAuth popup (implicit grant) ───────────────────────── */
@@ -5278,8 +5295,11 @@ function MetaConnectionSection({ slug }) {
     setConnecting(true);
     openMetaOAuth(async (longToken) => {
       try {
-        const pages = await metaGetPages(longToken);
-        setPagesData({ userToken: longToken, pages: pages.data || [] });
+        const pagesRes = await metaGetPages(longToken);
+        console.log("Meta pages response:", JSON.stringify(pagesRes));
+        if (pagesRes.error) throw new Error(pagesRes.error.message);
+        const pages = pagesRes.data || [];
+        setPagesData({ userToken: longToken, pages });
       } catch (e) {
         alert("Errore connessione Meta: " + e.message);
       } finally {

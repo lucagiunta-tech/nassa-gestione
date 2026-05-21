@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   const META_APP_ID     = process.env.META_APP_ID;
   const META_APP_SECRET = process.env.META_APP_SECRET;
-  const REDIRECT_URI    = "https://nassa-gestione.vercel.app/api/meta-oauth";
+  const REDIRECT_URI = process.env.META_REDIRECT_URI || "https://nassa-gestione.vercel.app/api/meta-oauth";
 
   // ── POST: main window exchanges code for pages ────────────
   if (req.method === "POST") {

@@ -358,7 +358,6 @@ async function metaGetPages(userToken) {
 /* ── OAuth popup (implicit grant) ───────────────────────── */
 
 function openMetaOAuth(onPages) {
-  // Server-side code flow — server fetches pages and posts them back
   const redirectUri = encodeURIComponent("https://nassa-gestione.vercel.app/api/meta-oauth");
   const url =
     `https://www.facebook.com/dialog/oauth?client_id=${META_APP_ID}` +
@@ -366,10 +365,23 @@ function openMetaOAuth(onPages) {
   const popup = window.open(url, "MetaLogin", "width=620,height=720,left=200,top=80");
 
   function handleMsg(e) {
-    if (e.data?.type === "META_OAUTH_PAGES") {
+    // Popup sends back just the code — we POST it to our server to get pages
+    if (e.data?.type === "META_OAUTH_CODE") {
       window.removeEventListener("message", handleMsg);
       clearInterval(poll);
-      onPages(e.data.pages); // array of pages with tokens already included
+      // Exchange code server-side via POST
+      fetch("/api/meta-oauth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: e.data.code }),
+      })
+        .then(r => r.json())
+        .then(d => {
+          if (d.error) { alert("Errore Meta: " + d.error); return; }
+          console.log("Meta pages:", JSON.stringify(d.pages));
+          onPages(d.pages || []);
+        })
+        .catch(err => alert("Errore connessione Meta: " + err.message));
     }
     if (e.data?.type === "META_OAUTH_ERROR") {
       window.removeEventListener("message", handleMsg);

@@ -306,83 +306,39 @@ async function uploadToDropbox(file, clientName, subfolder = "Images") {
 /* ─── META / FACEBOOK & INSTAGRAM CONFIG ─────────────────── */
 // Get these from https://developers.facebook.com → Your App → Settings > Basic
 const META_APP_ID     = "1543498264065807";     // App ID (public, safe in client)
-const META_APP_SECRET = "YOUR_META_APP_SECRET"; // App Secret (team-internal app only)
+// META_APP_SECRET is handled server-side only (api/meta-oauth.js via env var)
 const META_API        = "https://graph.facebook.com/v19.0";
 const META_SCOPES     = [
   "pages_manage_posts",
   "pages_read_engagement",
+  "pages_show_list",
   "instagram_content_publish",
   "instagram_basic",
-  "pages_show_list",
+  "instagram_business_basic",
 ].join(",");
 
-/* ── Token helpers ───────────────────────────────────────── */
-
-/** Short-lived → Long-lived (60 days) user token */
-async function metaExchangeLongLived(shortToken) {
-  const r = await fetch(
-    `${META_API}/oauth/access_token?grant_type=fb_exchange_token` +
-    `&client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}` +
-    `&fb_exchange_token=${encodeURIComponent(shortToken)}`
-  );
-  return r.json(); // { access_token, expires_in }
-}
-
-/** Get all FB Pages (+ linked IG accounts) the user manages */
-async function metaGetPages(userToken) {
-  // Step 1: get all pages the user manages
-  const r = await fetch(
-    `${META_API}/me/accounts?fields=id,name,access_token&limit=100` +
-    `&access_token=${encodeURIComponent(userToken)}`
-  );
-  const data = await r.json();
-  if (!data.data || data.data.length === 0) return data;
-
-  // Step 2: for each page, check if it has a linked IG Business account
-  const pages = await Promise.all(data.data.map(async (page) => {
-    try {
-      const igR = await fetch(
-        `${META_API}/${page.id}?fields=instagram_business_account{id,name,username,profile_picture_url}` +
-        `&access_token=${encodeURIComponent(page.access_token)}`
-      );
-      const igD = await igR.json();
-      return { ...page, instagram_business_account: igD.instagram_business_account || null };
-    } catch {
-      return { ...page, instagram_business_account: null };
-    }
-  }));
-
-  return { ...data, data: pages };
-}
-
-/* ── OAuth popup (implicit grant) ───────────────────────── */
+/* ── OAuth popup ─────────────────────────────────────────── */
+// Token exchange + page fetching is handled server-side in api/meta-oauth.js
 
 function openMetaOAuth(onPages) {
+  // Server-side code flow — server exchanges code, fetches pages, posts back via postMessage
   const redirectUri = encodeURIComponent("https://nassa-gestione.vercel.app/api/meta-oauth");
   const url =
     `https://www.facebook.com/dialog/oauth?client_id=${META_APP_ID}` +
-    `&redirect_uri=${redirectUri}&scope=${META_SCOPES}&response_type=code` +
-    `&auth_type=rerequest`;  // forces full flow, bypasses "Ricollega" cached screen
+    `&redirect_uri=${redirectUri}&scope=${META_SCOPES}&response_type=code`;
   const popup = window.open(url, "MetaLogin", "width=620,height=720,left=200,top=80");
 
+  // Guard: popup blocked by browser
+  if (!popup || popup.closed || typeof popup.closed === "undefined") {
+    alert("Il popup è stato bloccato dal browser.\nAbilita i popup per nassa-gestione.vercel.app nelle impostazioni del browser e riprova.");
+    return;
+  }
+
   function handleMsg(e) {
-    // Popup sends back just the code — we POST it to our server to get pages
-    if (e.data?.type === "META_OAUTH_CODE") {
+    if (e.data?.type === "META_OAUTH_PAGES") {
       window.removeEventListener("message", handleMsg);
       clearInterval(poll);
-      // Exchange code server-side via POST
-      fetch("/api/meta-oauth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: e.data.code }),
-      })
-        .then(r => r.json())
-        .then(d => {
-          if (d.error) { alert("Errore Meta: " + d.error); return; }
-          console.log("Meta pages:", JSON.stringify(d.pages));
-          onPages(d.pages || []);
-        })
-        .catch(err => alert("Errore connessione Meta: " + err.message));
+      onPages(e.data.pages); // array of pages with long-lived page tokens
     }
     if (e.data?.type === "META_OAUTH_ERROR") {
       window.removeEventListener("message", handleMsg);

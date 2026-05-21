@@ -5,8 +5,8 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const META_APP_ID     = process.env.META_APP_ID     || "1543498264065807";
-  const META_APP_SECRET = process.env.META_APP_SECRET || "e2f69284d7f2ea71a3752596d19e8921";
+  const META_APP_ID     = process.env.META_APP_ID;
+  const META_APP_SECRET = process.env.META_APP_SECRET;
   const REDIRECT_URI    = "https://nassa-gestione.vercel.app/api/meta-oauth";
 
   // ── POST: main window exchanges code for pages ────────────

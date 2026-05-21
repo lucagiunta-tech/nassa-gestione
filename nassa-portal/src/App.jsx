@@ -3738,7 +3738,7 @@ function UnifiedClient({ slug, isAdmin }) {
             {/* Portal settings */}
             <PortalSettings slug={slug}/>
             {/* Meta connection */}
-            <MetaConnectionSection slug={slug}/>
+            <MetaConnectionSection slug={slug} clienteNome={cliente?.nome || slug}/>
           </div>
         )}
 
@@ -5255,15 +5255,20 @@ function CopyLinkBtn({ slug }) {
 /* ─────────────────────────────────────────────────────────── */
 /*  META CONNECTION SECTION                                     */
 /* ─────────────────────────────────────────────────────────── */
-function MetaConnectionSection({ slug }) {
+function MetaConnectionSection({ slug, clienteNome }) {
   const [meta,       setMeta]       = useState(null);
   const [loading,    setLoading]    = useState(true);
   const [connecting, setConnecting] = useState(false);
-  const [pagesData,  setPagesData]  = useState(null); // pages to choose from
+  const [pagesData,  setPagesData]  = useState(null);
   const [saved,      setSaved]      = useState(false);
+  const [showGuide,  setShowGuide]  = useState(false); // pre-OAuth guide modal
+  const [showBm,     setShowBm]     = useState(false); // Business Manager token mode
+  const [bmToken,    setBmToken]    = useState("");
+  const [bmFetching, setBmFetching] = useState(false);
+  const [bmError,    setBmError]    = useState("");
 
   useEffect(() => {
-    setMeta(null);    // reset immediately — prevents previous client data showing briefly
+    setMeta(null);
     setLoading(true);
     store.get("clients:" + slug + ":meta").then(m => { setMeta(m || {}); setLoading(false); });
   }, [slug]);
@@ -5274,11 +5279,11 @@ function MetaConnectionSection({ slug }) {
     setSaved(true); setTimeout(() => setSaved(false), 2000);
   }
 
-  function startOAuth() {
+  function proceedOAuth() {
+    setShowGuide(false);
     setConnecting(true);
     openMetaOAuth(async (pages) => {
       try {
-        console.log("Meta pages received:", JSON.stringify(pages));
         setPagesData({ pages: pages || [] });
       } catch (e) {
         alert("Errore connessione Meta: " + e.message);
@@ -5288,9 +5293,37 @@ function MetaConnectionSection({ slug }) {
     });
   }
 
+  // Business Manager: fetch pages using a manually pasted token
+  async function fetchPagesFromToken() {
+    if (!bmToken.trim()) return;
+    setBmFetching(true);
+    setBmError("");
+    try {
+      // Try /me/accounts (works for System Users and personal tokens with pages_show_list)
+      const r = await fetch(
+        `https://graph.facebook.com/v19.0/me/accounts` +
+        `?fields=id,name,access_token,instagram_business_account{id,name,username,profile_picture_url}` +
+        `&limit=100&access_token=${encodeURIComponent(bmToken.trim())}`
+      );
+      const data = await r.json();
+      if (data.error) throw new Error(data.error.message);
+
+      if (data.data && data.data.length > 0) {
+        setPagesData({ pages: data.data });
+        setShowBm(false);
+        setBmToken("");
+      } else {
+        setBmError("Nessuna pagina trovata con questo token. Assicurati che il token abbia i permessi: pages_show_list, pages_manage_posts, instagram_content_publish.");
+      }
+    } catch (e) {
+      setBmError("Errore API: " + e.message);
+    } finally {
+      setBmFetching(false);
+    }
+  }
+
   async function selectPage(page) {
     const igAcc = page.instagram_business_account;
-    // page.access_token is already a long-lived page token from the server
     const updated = {
       ...meta,
       fb: { pageId: page.id, token: page.access_token, name: page.name, connectedAt: Date.now() },
@@ -5310,6 +5343,7 @@ function MetaConnectionSection({ slug }) {
 
   const ig = meta?.ig;
   const fb = meta?.fb;
+  const nome = clienteNome || slug;
 
   const cardStyle = {
     flex: 1, minWidth: 200, border: "1px solid " + C.border, borderRadius: 10,
@@ -5328,46 +5362,81 @@ function MetaConnectionSection({ slug }) {
         {saved && <span style={{ fontSize: 11, color: C.verde, fontWeight: 700 }}>✅ Salvato</span>}
       </div>
 
-      {/* Page selector shown after OAuth */}
+      {/* ── PAGE SELECTOR (after OAuth) ───────────────────── */}
       {pagesData && (
-        <div style={{ background: "#F0FFF4", border: "1px solid " + C.verde + "55", borderRadius: 8, padding: 14, marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Seleziona la pagina del cliente:</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pagesData.pages.length === 0 && (
-              <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: "12px 14px" }}>
-                <div style={{ fontWeight: 700, fontSize: 12, color: "#795548", marginBottom: 6 }}>⚠️ Nessuna pagina trovata</div>
-                <div style={{ fontSize: 11, color: "#795548", lineHeight: 1.7 }}>
-                  Due possibili cause:<br/>
-                  <strong>1.</strong> Durante il login Facebook hai saltato la selezione delle pagine — clicca <strong>"Annulla"</strong> qui sotto e poi <strong>"Ricollega / Cambia account"</strong>, ma questa volta clicca <strong>"Modifica impostazioni"</strong> (non "Ricollega") per scegliere la pagina giusta.<br/>
-                  <strong>2.</strong> L'account Facebook che hai usato non è Admin della pagina di questo cliente — fai aggiungere il tuo account come Admin dalla pagina del cliente, poi riprova.
-                </div>
-              </div>
-            )}
-            {pagesData.pages.map(page => (
-              <button key={page.id} onClick={() => selectPage(page)}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, background: C.white, cursor: "pointer", fontFamily: FONT, textAlign: "left" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{page.name}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>
-                    {page.instagram_business_account
-                      ? "📘 Facebook + 📸 Instagram @" + page.instagram_business_account.username
-                      : "📘 Solo Facebook (nessun account IG collegato)"}
-                  </div>
-                </div>
-                <span style={{ background: C.verde, color: "#fff", padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>Seleziona</span>
-              </button>
-            ))}
+        <div style={{ border: "1px solid " + C.border, borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+          <div style={{ background: "#1877F2", padding: "12px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>📄</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>Scegli la pagina per <em>{nome}</em></div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)" }}>Seleziona la pagina Facebook + account Instagram di questo cliente</div>
+            </div>
           </div>
-          <button onClick={() => setPagesData(null)}
-            style={{ marginTop: 10, fontSize: 11, color: C.muted, background: "none", border: "none", cursor: "pointer", fontFamily: FONT }}>
-            Annulla
-          </button>
+          <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, overflowY: "auto" }}>
+            {pagesData.pages.length === 0 ? (
+              <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: "14px 16px" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#795548", marginBottom: 8 }}>⚠️ Nessuna pagina trovata</div>
+                <div style={{ fontSize: 12, color: "#795548", lineHeight: 1.8 }}>
+                  <strong>Causa 1:</strong> Hai cliccato "Ricollega" invece di "Modifica impostazioni" nel popup Facebook. Clicca Annulla e riprova.<br/>
+                  <strong>Causa 2:</strong> Il tuo account non è Admin della pagina Facebook di {nome}. Fatti aggiungere come Admin e riprova.
+                </div>
+                <button onClick={() => setPagesData(null)}
+                  style={{ marginTop: 10, background: "#1877F2", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                  ← Riprova
+                </button>
+              </div>
+            ) : (
+              pagesData.pages.map(page => {
+                const igAcc = page.instagram_business_account;
+                return (
+                  <button key={page.id} onClick={() => selectPage(page)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
+                      border: "2px solid " + C.border, borderRadius: 9, background: C.white,
+                      cursor: "pointer", fontFamily: FONT, textAlign: "left", transition: "border-color .15s" }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = "#1877F2"}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+                    {/* Page avatar */}
+                    <div style={{ width: 42, height: 42, borderRadius: 8, background: "#1877F2",
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 16 }}>{(page.name||"P")[0]}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>{page.name}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{ background: "#E3F2FD", color: "#1877F2", padding: "1px 7px", borderRadius: 10, fontSize: 10, fontWeight: 700 }}>
+                          📘 Facebook
+                        </span>
+                        {igAcc ? (
+                          <span style={{ background: "#FCE4EC", color: "#E1306C", padding: "1px 7px", borderRadius: 10, fontSize: 10, fontWeight: 700 }}>
+                            📸 @{igAcc.username || igAcc.name}
+                          </span>
+                        ) : (
+                          <span style={{ background: "#F5F5F5", color: C.muted, padding: "1px 7px", borderRadius: 10, fontSize: 10 }}>
+                            Nessun IG collegato
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span style={{ background: C.verde, color: "#fff", padding: "6px 14px", borderRadius: 6,
+                      fontSize: 12, fontWeight: 700, flexShrink: 0 }}>Seleziona →</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {pagesData.pages.length > 0 && (
+            <div style={{ padding: "8px 12px", borderTop: "1px solid " + C.border, background: C.sfondo }}>
+              <button onClick={() => setPagesData(null)}
+                style={{ background: "none", border: "none", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: FONT }}>
+                ✕ Annulla
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Connection cards */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {/* Instagram */}
+      {/* ── CONNECTION STATUS CARDS ───────────────────────── */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <span style={{ background: "#E1306C", color: "#fff", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700 }}>📸 IG</span>
@@ -5376,7 +5445,7 @@ function MetaConnectionSection({ slug }) {
           </div>
           {ig ? (
             <>
-              <div style={{ fontSize: 12, color: C.testo, marginBottom: 8 }}>@{ig.name}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.testo, marginBottom: 8 }}>@{ig.name}</div>
               <button onClick={() => disconnect("ig")}
                 style={{ fontSize: 11, color: C.magenta, background: "none", border: "1px solid " + C.magenta + "55", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: FONT, fontWeight: 700 }}>
                 Disconnetti
@@ -5388,8 +5457,6 @@ function MetaConnectionSection({ slug }) {
             </div>
           )}
         </div>
-
-        {/* Facebook */}
         <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <span style={{ background: "#1877F2", color: "#fff", borderRadius: 6, padding: "3px 8px", fontSize: 11, fontWeight: 700 }}>📘 FB</span>
@@ -5398,46 +5465,221 @@ function MetaConnectionSection({ slug }) {
           </div>
           {fb ? (
             <>
-              <div style={{ fontSize: 12, color: C.testo, marginBottom: 8 }}>{fb.name}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.testo, marginBottom: 8 }}>{fb.name}</div>
               <button onClick={() => disconnect("fb")}
                 style={{ fontSize: 11, color: C.magenta, background: "none", border: "1px solid " + C.magenta + "55", borderRadius: 5, padding: "3px 10px", cursor: "pointer", fontFamily: FONT, fontWeight: 700 }}>
                 Disconnetti
               </button>
             </>
           ) : (
-            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
-              Collega la pagina per pubblicare post e reel.
-            </div>
+            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>Collega la pagina per pubblicare post e reel.</div>
           )}
         </div>
       </div>
 
-      {/* Main connect button */}
+      {/* ── CONNECT / RECONNECT BUTTONS ──────────────────── */}
       {(!ig || !fb) && (
-        <>
-          <button onClick={startOAuth} disabled={connecting}
-            style={{ marginTop: 14, width: "100%", background: connecting ? C.muted : "#1877F2", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: connecting ? .7 : 1 }}>
-            {connecting
-              ? (<><style>{`@keyframes dbx-spin{to{transform:rotate(360deg)}}`}</style><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "dbx-spin .7s linear infinite" }} /> Connessione...</>)
-              : "🔗 Connetti con Facebook / Instagram"
-            }
-          </button>
-          <div style={{ marginTop: 8, fontSize: 10, color: C.muted, lineHeight: 1.7, background: "#F8F8F8", borderRadius: 6, padding: "7px 11px" }}>
-            💡 <strong>Importante:</strong> Quando si apre il popup Facebook, se vedi "Vuoi ricollegare?" clicca <strong>"Modifica impostazioni"</strong> (non "Ricollega") per scegliere la pagina specifica di questo cliente.
-          </div>
-        </>
+        <button onClick={() => setShowGuide(true)} disabled={connecting}
+          style={{ width: "100%", background: connecting ? C.muted : "#1877F2", color: "#fff", border: "none",
+            borderRadius: 8, padding: "12px 0", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            opacity: connecting ? .7 : 1 }}>
+          {connecting
+            ? (<><style>{`@keyframes dbx-spin{to{transform:rotate(360deg)}}`}</style><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "dbx-spin .7s linear infinite" }} /> Connessione...</>)
+            : <><span style={{ fontSize: 15 }}>🔗</span> Connetti Facebook &amp; Instagram</>
+          }
+        </button>
       )}
       {(ig || fb) && (
-        <button onClick={startOAuth} disabled={connecting}
-          style={{ marginTop: 10, fontSize: 11, color: C.muted, background: "none", border: "1px solid " + C.border, borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontFamily: FONT }}>
+        <button onClick={() => setShowGuide(true)} disabled={connecting}
+          style={{ fontSize: 12, color: C.muted, background: "none", border: "1px solid " + C.border,
+            borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontFamily: FONT, marginTop: 4 }}>
           {connecting ? "Connessione..." : "🔄 Ricollega / Cambia account"}
         </button>
       )}
 
-      <div style={{ marginTop: 12, fontSize: 10, color: C.muted, lineHeight: 1.7, background: "#FFFDE7", borderRadius: 6, padding: "8px 12px" }}>
-        ⚠️ Il token scade dopo 60 giorni — riconnetti quando appare "Errore token scaduto".<br />
-        Assicurati che l'account sia <strong>Admin</strong> della pagina Facebook e che Instagram sia un account <strong>Business o Creator</strong>.
+      {/* ── BUSINESS MANAGER MODE ─────────────────────── */}
+      <div style={{ marginTop: 10 }}>
+        <button onClick={() => { setShowBm(v => !v); setBmError(""); }}
+          style={{ fontSize: 12, color: "#6A1B9A", background: showBm ? "#F3E5F5" : "none",
+            border: "1px solid #CE93D8", borderRadius: 6, padding: "6px 14px",
+            cursor: "pointer", fontFamily: FONT, fontWeight: 700,
+            display: "flex", alignItems: "center", gap: 5 }}>
+          🏢 {showBm ? "Chiudi" : "Connetti con Business Manager"}
+        </button>
+
+        {showBm && (
+          <div style={{ marginTop: 10, background: "#F9F0FF", border: "1px solid #CE93D8",
+            borderRadius: 10, padding: 16 }}>
+            {/* Header */}
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#6A1B9A", marginBottom: 10 }}>
+              🏢 Connessione tramite Business Manager
+            </div>
+
+            {/* Step by step instructions */}
+            <div style={{ background: "#fff", border: "1px solid #E1BEE7", borderRadius: 8,
+              padding: "12px 14px", marginBottom: 12, fontSize: 11, lineHeight: 1.9, color: "#444" }}>
+              <div style={{ fontWeight: 700, marginBottom: 6, color: "#6A1B9A" }}>Come ottenere il token:</div>
+              <div><strong>1.</strong> Vai su <a href="https://developers.facebook.com/tools/explorer" target="_blank" rel="noreferrer"
+                style={{ color: "#1877F2", fontWeight: 700 }}>developers.facebook.com/tools/explorer</a></div>
+              <div><strong>2.</strong> In alto a destra seleziona l'app <strong>"Nassa Gestione"</strong></div>
+              <div><strong>3.</strong> Clicca <strong>"Genera token d'accesso"</strong> → accedi come <strong>Nassa Client</strong></div>
+              <div><strong>4.</strong> Aggiungi permessi: <code style={{ background: "#F3E5F5", padding: "1px 4px", borderRadius: 3, fontSize: 10 }}>pages_show_list</code> <code style={{ background: "#F3E5F5", padding: "1px 4px", borderRadius: 3, fontSize: 10 }}>pages_manage_posts</code> <code style={{ background: "#F3E5F5", padding: "1px 4px", borderRadius: 3, fontSize: 10 }}>instagram_content_publish</code> <code style={{ background: "#F3E5F5", padding: "1px 4px", borderRadius: 3, fontSize: 10 }}>instagram_basic</code></div>
+              <div><strong>5.</strong> Copia il token generato e incollalo qui sotto</div>
+            </div>
+
+            {/* OR: System User instructions */}
+            <div style={{ background: "#E8F5E9", border: "1px solid #A5D6A7", borderRadius: 8,
+              padding: "10px 14px", marginBottom: 12, fontSize: 11, lineHeight: 1.9, color: "#2E7D32" }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>🏆 Soluzione permanente (token che non scade):</div>
+              <div><strong>1.</strong> Business Manager → <strong>Impostazioni business → Utenti → Utenti di sistema</strong></div>
+              <div><strong>2.</strong> Crea un utente di sistema con ruolo <strong>Admin</strong></div>
+              <div><strong>3.</strong> Assegnagli tutte le pagine clienti</div>
+              <div><strong>4.</strong> Clicca <strong>"Genera nuovo token"</strong> → seleziona app "Nassa Gestione" → aggiungi tutti i permessi pagine e Instagram → imposta scadenza <strong>Mai</strong></div>
+              <div><strong>5.</strong> Incolla il token qui sotto — funzionerà per sempre!</div>
+            </div>
+
+            {/* Token input */}
+            <textarea
+              value={bmToken}
+              onChange={e => { setBmToken(e.target.value); setBmError(""); }}
+              placeholder="Incolla qui il token d'accesso..."
+              rows={3}
+              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #CE93D8",
+                borderRadius: 7, padding: "9px 12px", fontSize: 12, fontFamily: FONT,
+                resize: "vertical", lineHeight: 1.5, outline: "none",
+                background: "#fff", color: C.testo }}
+            />
+            {bmError && (
+              <div style={{ marginTop: 6, fontSize: 11, color: C.magenta, background: "#FFF0F0",
+                border: "1px solid " + C.magenta + "33", borderRadius: 6, padding: "7px 10px", lineHeight: 1.6 }}>
+                ❌ {bmError}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button onClick={fetchPagesFromToken} disabled={bmFetching || !bmToken.trim()}
+                style={{ flex: 1, background: "#6A1B9A", color: "#fff", border: "none", borderRadius: 7,
+                  padding: "9px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+                  opacity: (!bmToken.trim() || bmFetching) ? 0.6 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                {bmFetching
+                  ? (<><style>{`@keyframes dbx-spin2{to{transform:rotate(360deg)}}`}</style><div style={{ width: 13, height: 13, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "dbx-spin2 .7s linear infinite" }}/> Ricerca pagine...</>)
+                  : "🔍 Cerca pagine"}
+              </button>
+              <button onClick={() => { setShowBm(false); setBmToken(""); setBmError(""); }}
+                style={{ background: "none", border: "1px solid #CE93D8", borderRadius: 7,
+                  padding: "9px 14px", fontSize: 12, color: "#6A1B9A", cursor: "pointer", fontFamily: FONT }}>
+                Annulla
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      <div style={{ marginTop: 12, fontSize: 10, color: "#795548", lineHeight: 1.7, background: "#FFFDE7", borderRadius: 6, padding: "8px 12px" }}>
+        ⚠️ Il token OAuth scade dopo 60 giorni — usa il metodo Business Manager per token permanenti.<br />
+        Assicurati che Instagram sia un account <strong>Business o Creator</strong> collegato alla Pagina Facebook.
+      </div>
+
+      {/* ── PRE-OAUTH GUIDE MODAL ─────────────────────────── */}
+      {showGuide && (
+        <div onClick={() => setShowGuide(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 2000,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: C.white, borderRadius: 16, maxWidth: 460, width: "100%",
+              boxShadow: "0 20px 60px rgba(0,0,0,.3)", overflow: "hidden" }}>
+
+            {/* Header */}
+            <div style={{ background: "#1877F2", padding: "18px 22px", display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 24 }}>📘</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: "#fff" }}>Connetti Facebook & Instagram</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,.8)" }}>per il cliente: {nome}</div>
+              </div>
+              <button onClick={() => setShowGuide(false)}
+                style={{ marginLeft: "auto", background: "none", border: "none", color: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+            </div>
+
+            {/* Steps */}
+            <div style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 0 }}>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, fontWeight: 600 }}>
+                Segui questi 3 passi nel popup che si aprirà:
+              </div>
+
+              {/* Step 1 */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#1877F2", color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0, marginTop: 1 }}>1</div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>Si apre il popup Facebook</div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                    Potrebbe chiederti di passare all'account Nassa Client — clicca <strong>Continua</strong>.
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2 — THE KEY STEP */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#E65100", color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0, marginTop: 1 }}>2</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>
+                    ⚠️ Se vedi "Vuoi ricollegare?"
+                  </div>
+                  {/* Visual mockup of the Facebook dialog */}
+                  <div style={{ background: "#F8F8F8", border: "1px solid #DDD", borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#333", marginBottom: 8 }}>Vuoi ricollegare Nassa Client a Nassa Gestione?</div>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      {/* Highlight Modifica impostazioni */}
+                      <div style={{ background: "#E3F2FD", border: "2px solid #1877F2", borderRadius: 6,
+                        padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#1877F2",
+                        display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontSize: 14 }}>👆</span> Modifica impostazioni
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ background: "#F5F5F5", border: "1px solid #CCC", borderRadius: 6,
+                        padding: "4px 10px", fontSize: 10, color: "#999" }}>Non ora</div>
+                      <div style={{ background: "#F5F5F5", border: "1px solid #CCC", borderRadius: 6,
+                        padding: "4px 10px", fontSize: 10, color: "#999",
+                        textDecoration: "line-through" }}>Ricollega ❌</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.arancio, fontWeight: 700 }}>
+                    Clicca "Modifica impostazioni" — NON "Ricollega"
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.verde, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0, marginTop: 1 }}>3</div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>Seleziona la pagina di <em>{nome}</em></div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                    Scegli la pagina Facebook (e l'account Instagram collegato) specifici per questo cliente. Poi clicca <strong>Continua → Salva</strong>.
+                  </div>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <button onClick={proceedOAuth}
+                style={{ width: "100%", background: "#1877F2", color: "#fff", border: "none", borderRadius: 9,
+                  padding: "13px 0", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: FONT,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <span style={{ fontSize: 16 }}>📘</span> Ho capito — Apri Facebook
+              </button>
+              <button onClick={() => setShowGuide(false)}
+                style={{ marginTop: 8, width: "100%", background: "none", border: "1px solid " + C.border,
+                  borderRadius: 8, padding: "9px 0", fontSize: 13, color: C.muted, cursor: "pointer", fontFamily: FONT }}>
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

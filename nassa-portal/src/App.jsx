@@ -2370,6 +2370,7 @@ function FeedWithPreview({ feed, setFeed, schedSave, isAdmin, clienteNome, slug,
   const [publishPost, setPublishPost] = useState(null); // post being published
 
   useEffect(() => {
+    setMetaData(null); // reset immediately so previous client's data doesn't bleed through
     if (slug) store.get("clients:" + slug + ":meta").then(m => setMetaData(m || {}));
   }, [slug]);
 
@@ -3340,6 +3341,17 @@ function UnifiedClient({ slug, isAdmin }) {
   }, []);
 
   useEffect(() => {
+    // Reset ALL client-specific state immediately when slug changes
+    // This prevents the previous client's data from bleeding into the new one
+    setCliente(null);
+    setProgress(null);
+    setFeed(null);
+    setDocs(null);
+    setSetup(null);
+    setPed([]);
+    setKpi(null);
+    setErr(null);
+
     (async () => {
       setLoading(true);
       const c = await store.get("clients:"+slug);
@@ -5251,6 +5263,8 @@ function MetaConnectionSection({ slug }) {
   const [saved,      setSaved]      = useState(false);
 
   useEffect(() => {
+    setMeta(null);    // reset immediately — prevents previous client data showing briefly
+    setLoading(true);
     store.get("clients:" + slug + ":meta").then(m => { setMeta(m || {}); setLoading(false); });
   }, [slug]);
 
@@ -5320,7 +5334,14 @@ function MetaConnectionSection({ slug }) {
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Seleziona la pagina del cliente:</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pagesData.pages.length === 0 && (
-              <div style={{ color: C.muted, fontSize: 12 }}>Nessuna pagina trovata. Assicurati che l'account gestisca almeno una Pagina Facebook.</div>
+              <div style={{ background: "#FFF8E1", border: "1px solid #FFE082", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontWeight: 700, fontSize: 12, color: "#795548", marginBottom: 6 }}>⚠️ Nessuna pagina trovata</div>
+                <div style={{ fontSize: 11, color: "#795548", lineHeight: 1.7 }}>
+                  Due possibili cause:<br/>
+                  <strong>1.</strong> Durante il login Facebook hai saltato la selezione delle pagine — clicca <strong>"Annulla"</strong> qui sotto e poi <strong>"Ricollega / Cambia account"</strong>, ma questa volta clicca <strong>"Modifica impostazioni"</strong> (non "Ricollega") per scegliere la pagina giusta.<br/>
+                  <strong>2.</strong> L'account Facebook che hai usato non è Admin della pagina di questo cliente — fai aggiungere il tuo account come Admin dalla pagina del cliente, poi riprova.
+                </div>
+              </div>
             )}
             {pagesData.pages.map(page => (
               <button key={page.id} onClick={() => selectPage(page)}
@@ -5393,13 +5414,18 @@ function MetaConnectionSection({ slug }) {
 
       {/* Main connect button */}
       {(!ig || !fb) && (
-        <button onClick={startOAuth} disabled={connecting}
-          style={{ marginTop: 14, width: "100%", background: connecting ? C.muted : "#1877F2", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: connecting ? .7 : 1 }}>
-          {connecting
-            ? (<><style>{`@keyframes dbx-spin{to{transform:rotate(360deg)}}`}</style><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "dbx-spin .7s linear infinite" }} /> Connessione...</>)
-            : "🔗 Connetti con Facebook / Instagram"
-          }
-        </button>
+        <>
+          <button onClick={startOAuth} disabled={connecting}
+            style={{ marginTop: 14, width: "100%", background: connecting ? C.muted : "#1877F2", color: "#fff", border: "none", borderRadius: 8, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: connecting ? .7 : 1 }}>
+            {connecting
+              ? (<><style>{`@keyframes dbx-spin{to{transform:rotate(360deg)}}`}</style><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "dbx-spin .7s linear infinite" }} /> Connessione...</>)
+              : "🔗 Connetti con Facebook / Instagram"
+            }
+          </button>
+          <div style={{ marginTop: 8, fontSize: 10, color: C.muted, lineHeight: 1.7, background: "#F8F8F8", borderRadius: 6, padding: "7px 11px" }}>
+            💡 <strong>Importante:</strong> Quando si apre il popup Facebook, se vedi "Vuoi ricollegare?" clicca <strong>"Modifica impostazioni"</strong> (non "Ricollega") per scegliere la pagina specifica di questo cliente.
+          </div>
+        </>
       )}
       {(ig || fb) && (
         <button onClick={startOAuth} disabled={connecting}

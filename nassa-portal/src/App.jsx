@@ -6415,16 +6415,22 @@ function ClientApprovalView({ slug }) {
                   transition:"all .3s"}}>
 
                 {/* immagine / carousel */}
-                <div style={{position:"relative",width:"100%",
-                  background:hasVideo||mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
-                  height:(isReel||isStoria)?"min(75vh, 520px)":viewMode==="grid"?"220px":"380px",
-                  overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {/* ── MEDIA AREA — natural aspect ratio, no cropping ── */}
+                <div style={{position:"relative",width:"100%",background:hasVideo||mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")"}}>
 
-                  {/* Carousel viewer */}
-                  {isCarousel && carouselImgs.length > 0 ? (
-                    <>
-                      <img src={fixMediaUrl(carouselImgs[carIdx])} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                      {/* arrows */}
+                  {/* Reel / Storia — fixed height video player */}
+                  {hasVideo ? (
+                    <video
+                      src={videoSrc}
+                      controls
+                      playsInline
+                      style={{display:"block",width:"100%",maxHeight:"75vh",objectFit:"contain",background:"#000"}}
+                    />
+                  ) : isCarousel && carouselImgs.length > 0 ? (
+                    /* Carousel — show full image at natural ratio */
+                    <div style={{position:"relative"}}>
+                      <img src={fixMediaUrl(carouselImgs[carIdx])} alt=""
+                        style={{display:"block",width:"100%",height:"auto"}}/>
                       {carIdx > 0 && (
                         <button onClick={()=>setCarIdx(c=>c-1)}
                           style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",
@@ -6439,30 +6445,23 @@ function ClientApprovalView({ slug }) {
                           <span style={{color:"#fff",fontSize:16}}>›</span>
                         </button>
                       )}
-                      {/* dots */}
                       <div style={{position:"absolute",bottom:8,left:0,right:0,display:"flex",justifyContent:"center",gap:4,zIndex:5}}>
                         {carouselImgs.map((_,ci)=>(
                           <div key={ci} onClick={()=>setCarIdx(ci)} style={{width:ci===carIdx?16:6,height:6,borderRadius:3,background:ci===carIdx?"#fff":"rgba(255,255,255,.5)",cursor:"pointer",transition:"width .2s"}}/>
                         ))}
                       </div>
-                      {/* counter */}
                       <div style={{position:"absolute",top:10,right:10,background:"rgba(0,0,0,.55)",borderRadius:6,padding:"2px 8px",zIndex:5}}>
                         <span style={{fontSize:11,color:"#fff",fontWeight:700}}>{carIdx+1}/{carouselImgs.length}</span>
                       </div>
-                    </>
-                  ) : hasVideo ? (
-                    <video
-                      src={videoSrc}
-                      controls
-                      playsInline
-                      style={{width:"100%",height:"100%",objectFit:"contain"}}
-                    />
+                    </div>
                   ) : mainImg ? (
-                    <img src={mainImg} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    /* Post — full image, natural height, no cropping */
+                    <img src={mainImg} alt="" style={{display:"block",width:"100%",height:"auto"}}/>
                   ) : (
-                    <div style={{textAlign:"center",padding:24}}>
-                      <div style={{fontSize:36,marginBottom:8,opacity:.6}}>{isReel?"🎬":isStoria?"📱":"📷"}</div>
-                      <div style={{color:"rgba(255,255,255,.9)",fontSize:15,fontWeight:700,lineHeight:1.3}}>{post.titolo}</div>
+                    /* Placeholder */
+                    <div style={{height:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
+                      <div style={{fontSize:36,opacity:.5}}>{isReel?"🎬":isStoria?"📱":"📷"}</div>
+                      <div style={{color:"rgba(255,255,255,.8)",fontSize:14,fontWeight:700}}>{post.titolo}</div>
                     </div>
                   )}
 

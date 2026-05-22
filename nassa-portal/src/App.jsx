@@ -6193,6 +6193,7 @@ function ClientApprovalView({ slug }) {
   const [copied,      setCopied]      = useState(false);
   const [portalSettings, setPortalSettings] = useState({ showFeed: true, showKanban: false });
   const [carouselIdx, setCarouselIdx] = useState({});
+  const [viewMode,    setViewMode]    = useState("card"); // "card" | "grid"
 
   function getCarIdx(id)      { return carouselIdx[id] || 0; }
   function setCarIdx(id, idx) { setCarouselIdx(prev => ({...prev, [id]: idx})); }
@@ -6313,17 +6314,48 @@ function ClientApprovalView({ slug }) {
         <div style={{height:"100%",width:(feed.length?(approved/feed.length*100):0)+"%",background:C.verde,transition:"width .5s"}}/>
       </div>
 
-      <div style={{maxWidth:500,margin:"0 auto",padding:"20px 16px"}}>
-        {/* intro */}
-        <div style={{marginBottom:22}}>
-          <h2 style={{margin:"0 0 5px",fontSize:20,fontWeight:800}}>
-            {approved===feed.length&&feed.length>0 ? "🎉 Tutti approvati!" : "I tuoi contenuti"}
-          </h2>
-          <p style={{margin:0,fontSize:12,color:C.muted,lineHeight:1.6}}>
-            {approved===feed.length&&feed.length>0
-              ? "Perfetto, hai approvato tutti i post. Il team Nassa inizierà la pubblicazione."
-              : "Esamina ogni post e approvalo o segnala cosa modificare. Il team riceve la tua risposta in tempo reale."}
-          </p>
+      <div style={{maxWidth: viewMode==="grid" ? 900 : 500, margin:"0 auto",padding:"20px 16px"}}>
+        {/* intro + view toggle */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:22,gap:12}}>
+          <div style={{flex:1}}>
+            <h2 style={{margin:"0 0 5px",fontSize:20,fontWeight:800}}>
+              {approved===feed.length&&feed.length>0 ? "🎉 Tutti approvati!" : "I tuoi contenuti"}
+            </h2>
+            <p style={{margin:0,fontSize:12,color:C.muted,lineHeight:1.6}}>
+              {approved===feed.length&&feed.length>0
+                ? "Perfetto, hai approvato tutti i post. Il team Nassa inizierà la pubblicazione."
+                : "Esamina ogni post e approvalo o segnala cosa modificare. Il team riceve la tua risposta in tempo reale."}
+            </p>
+          </div>
+          {/* View toggle */}
+          <div style={{display:"flex",gap:4,background:"#E8E8E8",borderRadius:10,padding:3,flexShrink:0,alignSelf:"flex-start",marginTop:4}}>
+            <button onClick={()=>setViewMode("card")}
+              style={{padding:"6px 10px",borderRadius:7,border:"none",cursor:"pointer",fontFamily:FONT,fontSize:11,fontWeight:700,
+                background:viewMode==="card"?"#fff":"transparent",
+                color:viewMode==="card"?C.testo:C.muted,
+                boxShadow:viewMode==="card"?"0 1px 4px rgba(0,0,0,.12)":"none",
+                transition:"all .15s",display:"flex",alignItems:"center",gap:4}}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="1" width="12" height="4" rx="1.5" fill="currentColor" opacity=".9"/>
+                <rect x="1" y="7" width="12" height="4" rx="1.5" fill="currentColor" opacity=".9"/>
+              </svg>
+              Lista
+            </button>
+            <button onClick={()=>setViewMode("grid")}
+              style={{padding:"6px 10px",borderRadius:7,border:"none",cursor:"pointer",fontFamily:FONT,fontSize:11,fontWeight:700,
+                background:viewMode==="grid"?"#fff":"transparent",
+                color:viewMode==="grid"?C.testo:C.muted,
+                boxShadow:viewMode==="grid"?"0 1px 4px rgba(0,0,0,.12)":"none",
+                transition:"all .15s",display:"flex",alignItems:"center",gap:4}}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="1" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".9"/>
+                <rect x="7.5" y="1" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".9"/>
+                <rect x="1" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".9"/>
+                <rect x="7.5" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity=".9"/>
+              </svg>
+              Griglia
+            </button>
+          </div>
         </div>
 
         {/* Feed visibility gated by admin setting */}
@@ -6344,7 +6376,12 @@ function ClientApprovalView({ slug }) {
         )}
 
         {portalSettings.showFeed && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        <div style={{
+          display: viewMode==="grid" ? "grid" : "flex",
+          gridTemplateColumns: viewMode==="grid" ? "repeat(2, 1fr)" : undefined,
+          flexDirection: viewMode==="grid" ? undefined : "column",
+          gap: viewMode==="grid" ? 12 : 16
+        }}>
           {feed.map((post, i) => {
             // Support both single (legacy) and multi-platform
             const plats   = Array.isArray(post.piattaforme) && post.piattaforme.length ? post.piattaforme : (post.piattaforma ? [post.piattaforma] : []);
@@ -6378,10 +6415,9 @@ function ClientApprovalView({ slug }) {
                   transition:"all .3s"}}>
 
                 {/* immagine / carousel */}
-                <div style={{position:"relative",
+                <div style={{position:"relative",width:"100%",
                   background:hasVideo||mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
-                  aspectRatio:getAspectRatio(tipo),
-                  maxHeight:(isReel||isStoria)?"75vh":isCarousel?"420px":"420px",
+                  height:(isReel||isStoria)?"min(75vh, 520px)":viewMode==="grid"?"220px":"380px",
                   overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
 
                   {/* Carousel viewer */}
@@ -6422,7 +6458,7 @@ function ClientApprovalView({ slug }) {
                       style={{width:"100%",height:"100%",objectFit:"contain"}}
                     />
                   ) : mainImg ? (
-                    <img src={mainImg} alt="" style={{width:"100%",height:"100%",objectFit:isCarousel?"cover":"contain"}}/>
+                    <img src={mainImg} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                   ) : (
                     <div style={{textAlign:"center",padding:24}}>
                       <div style={{fontSize:36,marginBottom:8,opacity:.6}}>{isReel?"🎬":isStoria?"📱":"📷"}</div>
@@ -6447,7 +6483,7 @@ function ClientApprovalView({ slug }) {
                 </div>
 
                 {/* info + azioni */}
-                <div style={{padding:"16px 18px"}}>
+                <div style={{padding: viewMode==="grid" ? "10px 12px" : "16px 18px"}}>
                   <div style={{marginBottom:12}}>
                     <div style={{fontWeight:700,fontSize:16,marginBottom:6}}>{post.titolo}</div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>

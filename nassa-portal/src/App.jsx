@@ -286,21 +286,69 @@ async function uploadToDropbox(file, clientName, subfolder = "Images") {
   const ext      = (file.name.split(".").pop() || "bin").toLowerCase();
   const safeName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
   const path     = `${DROPBOX_FOLDER}/${folder}/${sub}/${safeName}`;
+  const isLarge  = file.size > 4 * 1024 * 1024; // >4MB → upload direct from browser
 
-  // Call our Vercel proxy instead of Dropbox directly (avoids CORS)
-  const res = await fetch("/api/dropbox-upload", {
-    method:  "POST",
-    headers: { "x-dropbox-path": path, "Content-Type": file.type || "application/octet-stream" },
-    body:    file,
-  });
+  if (isLarge) {
+    // ── Direct browser → Dropbox upload (bypasses Vercel 4.5MB limit) ──
+    // Step 1: get a short-lived token from our tiny Vercel endpoint
+    const tokRes = await fetch("/api/dropbox-token");
+    if (!tokRes.ok) throw new Error("Could not get upload token");
+    const { token } = await tokRes.json();
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Upload fallito (${res.status})`);
+    if (file.size <= 150 * 1024 * 1024) {
+      // Single-shot upload
+      const uploadRes = await fetch("https://content.dropboxapi.com/2/files/upload", {
+        method: "POST",
+        headers: {
+          "Authorization":    `Bearer ${token}`,
+          "Content-Type":     "application/octet-stream",
+          "Dropbox-API-Arg":  JSON.stringify({ path, mode: "overwrite", autorename: true }),
+        },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        const t = await uploadRes.text();
+        throw new Error("Dropbox upload failed: " + t);
+      }
+      const uploadData = await uploadRes.json();
+
+      // Create shared link
+      const linkRes = await fetch("https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ path: uploadData.path_lower }),
+      });
+      const linkData = await linkRes.json();
+      let url = linkData.url || null;
+
+      // Fallback: list existing links
+      if (!url) {
+        const listRes = await fetch("https://api.dropboxapi.com/2/sharing/list_shared_links", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ path: uploadData.path_lower, direct_only: true }),
+        });
+        const listData = await listRes.json();
+        url = listData.links?.[0]?.url || null;
+      }
+
+      if (!url) throw new Error("Could not create public link");
+      return fixMediaUrl(url);
+    }
+  } else {
+    // ── Small file: use Vercel proxy (keeps CORS simple) ──
+    const res = await fetch("/api/dropbox-upload", {
+      method:  "POST",
+      headers: { "x-dropbox-path": path, "Content-Type": file.type || "application/octet-stream" },
+      body:    file,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Upload fallito (${res.status})`);
+    }
+    const data = await res.json();
+    return data.url; // already raw=1
   }
-
-  const data = await res.json();
-  return data.url; // already ?raw=1
 }
 
 /* ─── META / FACEBOOK & INSTAGRAM CONFIG ─────────────────── */
@@ -6306,10 +6354,13 @@ function ClientApprovalView({ slug }) {
             const isStoria   = tipo === "storia";
             const carouselImgs = post.immagini || [];
             const carIdx = getCarIdx(post.id);
-            // Pick the best image to show
-            const mainImg = isCarousel
+            // Pick the best media to show
+            const videoSrc   = (isReel || isStoria) ? (fixMediaUrl(post.videoUrl) || post.videoBase64 || null) : null;
+            const hasVideo   = !!(videoSrc);
+            const mainImg    = isCarousel
               ? (carouselImgs[carIdx] || null)
-              : (post.immagineBase64 || post.immagineUrl || null);
+              : hasVideo ? videoSrc
+              : (post.immagineBase64 || fixMediaUrl(post.immagineUrl) || null);
 
             const isApp  = post.stato === "approvato";
             const isRej  = post.stato === "non-approvato";
@@ -6328,8 +6379,9 @@ function ClientApprovalView({ slug }) {
 
                 {/* immagine / carousel */}
                 <div style={{position:"relative",
-                  background:mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
+                  background:hasVideo||mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
                   aspectRatio:getAspectRatio(tipo),
+                  maxHeight:(isReel||isStoria)?"70vh":"none",
                   overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
 
                   {/* Carousel viewer */}
@@ -6362,15 +6414,15 @@ function ClientApprovalView({ slug }) {
                         <span style={{fontSize:11,color:"#fff",fontWeight:700}}>{carIdx+1}/{carouselImgs.length}</span>
                       </div>
                     </>
+                  ) : hasVideo ? (
+                    <video
+                      src={videoSrc}
+                      controls
+                      playsInline
+                      style={{width:"100%",height:"100%",objectFit:"contain"}}
+                    />
                   ) : mainImg ? (
-                    (isReel || isStoria) && (post.videoUrl || post.videoBase64)
-                      ? <video
-                          src={fixMediaUrl(post.videoUrl)||post.videoBase64}
-                          controls
-                          playsInline
-                          style={{width:"100%",height:"100%",objectFit:"cover"}}
-                        />
-                      : <img src={fixMediaUrl(mainImg)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    <img src={mainImg} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                   ) : (
                     <div style={{textAlign:"center",padding:24}}>
                       <div style={{fontSize:36,marginBottom:8,opacity:.6}}>{isReel?"🎬":isStoria?"📱":"📷"}</div>

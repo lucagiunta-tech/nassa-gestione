@@ -6314,7 +6314,7 @@ function ClientApprovalView({ slug }) {
         <div style={{height:"100%",width:(feed.length?(approved/feed.length*100):0)+"%",background:C.verde,transition:"width .5s"}}/>
       </div>
 
-      <div style={{maxWidth: viewMode==="grid" ? 900 : 500, margin:"0 auto",padding:"20px 16px"}}>
+      <div style={{maxWidth: viewMode==="grid" ? 860 : 420, margin:"0 auto",padding:"20px 16px"}}>
         {/* intro + view toggle */}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:22,gap:12}}>
           <div style={{flex:1}}>
@@ -6415,8 +6415,11 @@ function ClientApprovalView({ slug }) {
                   transition:"all .3s"}}>
 
                 {/* immagine / carousel */}
-                {/* ── MEDIA AREA — natural aspect ratio, no cropping ── */}
-                <div style={{position:"relative",width:"100%",background:hasVideo||mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")"}}>
+                {/* ── MEDIA AREA ── */}
+                <div style={{position:"relative",width:"100%",
+                  background:hasVideo||mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
+                  // In grid mode: fixed height so all cards align; in list: natural height
+                  ...(viewMode==="grid" ? {height:260,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"} : {})}}>
 
                   {/* Reel / Storia — fixed height video player */}
                   {hasVideo ? (
@@ -6424,13 +6427,13 @@ function ClientApprovalView({ slug }) {
                       src={videoSrc}
                       controls
                       playsInline
-                      style={{display:"block",width:"100%",maxHeight:"75vh",objectFit:"contain",background:"#000"}}
+                      style={{display:"block",width:"100%",maxHeight:viewMode==="grid"?"260px":"75vh",objectFit:"contain",background:"#000"}}
                     />
                   ) : isCarousel && carouselImgs.length > 0 ? (
-                    /* Carousel — show full image at natural ratio */
-                    <div style={{position:"relative"}}>
+                    /* Carousel */
+                    <div style={{position:"relative",width:"100%"}}>
                       <img src={fixMediaUrl(carouselImgs[carIdx])} alt=""
-                        style={{display:"block",width:"100%",height:"auto"}}/>
+                        style={{display:"block",width:"100%",height:viewMode==="grid"?"260px":"auto",objectFit:viewMode==="grid"?"contain":"initial"}}/>
                       {carIdx > 0 && (
                         <button onClick={()=>setCarIdx(c=>c-1)}
                           style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",width:32,height:32,borderRadius:"50%",
@@ -6455,8 +6458,10 @@ function ClientApprovalView({ slug }) {
                       </div>
                     </div>
                   ) : mainImg ? (
-                    /* Post — full image, natural height, no cropping */
-                    <img src={mainImg} alt="" style={{display:"block",width:"100%",height:"auto"}}/>
+                    /* Post — natural height in list, fixed height in grid */
+                    <img src={mainImg} alt="" style={{display:"block",width:"100%",
+                      height:viewMode==="grid"?"260px":"auto",
+                      objectFit:viewMode==="grid"?"contain":"initial"}}/>
                   ) : (
                     /* Placeholder */
                     <div style={{height:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -6482,7 +6487,7 @@ function ClientApprovalView({ slug }) {
                 </div>
 
                 {/* info + azioni */}
-                <div style={{padding: viewMode==="grid" ? "10px 12px" : "16px 18px"}}>
+                <div style={{padding: viewMode==="grid" ? "10px 12px" : "14px 16px"}}>
                   <div style={{marginBottom:12}}>
                     <div style={{fontWeight:700,fontSize:16,marginBottom:6}}>{post.titolo}</div>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>

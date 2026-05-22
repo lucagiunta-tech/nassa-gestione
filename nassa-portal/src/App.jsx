@@ -1424,6 +1424,34 @@ function ProgressSection({ progress, isAdmin, onEdit, onOpenDocs, clienteSlug, m
 /* ─────────────────────────────────────────────────────────── */
 /*  FEED                                                        */
 /* ─────────────────────────────────────────────────────────── */
+// ── Global media helpers (used by multiple components) ─────────
+
+/** Converts any Dropbox share URL to a direct playable/embeddable URL */
+function fixMediaUrl(url) {
+  if (!url) return url;
+  if (url.includes("dropbox.com")) {
+    // Convert to direct download URL
+    let u = url
+      .replace("www.dropbox.com", "dl.dropboxusercontent.com")
+      .replace("dl.dropbox.com", "dl.dropboxusercontent.com");
+    // Remove existing dl/raw params then add raw=1
+    u = u.replace(/[?&]dl=[01]/g, m => m[0]); // keep ? or & char
+    u = u.replace(/[?&]raw=1/g, m => m[0]);
+    // Append raw=1
+    u = u + (u.includes("?") ? "&raw=1" : "?raw=1");
+    return u;
+  }
+  return url;
+}
+
+/** Returns the correct CSS aspectRatio string for a given post type */
+function getAspectRatio(tipo) {
+  if (tipo === "reel")     return "9/16";
+  if (tipo === "storia")   return "9/16";
+  if (tipo === "carousel") return "1/1";
+  return "4/5"; // post — Instagram standard portrait
+}
+
 function FeedSection({ feed }) {
   const [sel, setSel] = useState(null);
   if (!feed || !feed.length) {
@@ -2393,31 +2421,6 @@ function FeedWithPreview({ feed, setFeed, schedSave, isAdmin, clienteNome, slug,
   }
   function getCarIdx(id)        { return carouselIdx[id] || 0; }
   function setCarIdx(id, idx)   { setCarouselIdx(prev => ({...prev,[id]:idx})); }
-
-  // Fix Dropbox preview links → raw playable URLs
-  function fixMediaUrl(url) {
-    if (!url) return url;
-    if (url.includes("dropbox.com")) {
-      return url
-        .replace("?dl=0","?raw=1")
-        .replace("&dl=0","&raw=1")
-        .replace("?dl=1","?raw=1")
-        .replace("&dl=1","&raw=1")
-        .replace("www.dropbox.com","dl.dropboxusercontent.com");
-    }
-    return url;
-  }
-
-  // Get the correct aspect ratio CSS string per post type
-  function getAspectRatio(tipo, piattaforme) {
-    const plats = Array.isArray(piattaforme) ? piattaforme : (piattaforme ? [piattaforme] : []);
-    if (tipo === "storia")   return "9/16";
-    if (tipo === "reel")     return "9/16";
-    if (tipo === "carousel") return "1/1";
-    // post: 4:5 for Instagram, 1:1 for others
-    if (plats.includes("instagram") && !plats.includes("facebook") && !plats.includes("linkedin")) return "4/5";
-    return "4/5"; // default safe ratio
-  }
 
   function getMainImg(post) {
     if (post.tipo === "reel" || post.tipo === "storia") {
@@ -6326,7 +6329,7 @@ function ClientApprovalView({ slug }) {
                 {/* immagine / carousel */}
                 <div style={{position:"relative",
                   background:mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
-                  aspectRatio:getAspectRatio(tipo, post.piattaforme||post.piattaforma),
+                  aspectRatio:getAspectRatio(tipo),
                   overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
 
                   {/* Carousel viewer */}

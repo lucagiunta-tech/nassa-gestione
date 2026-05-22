@@ -406,7 +406,7 @@ async function igPublish(igUserId, token, post, scheduleUnix) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         media_type: "REELS",
-        video_url: post.videoUrl || "",
+        video_url: (post.videoUrl ? post.videoUrl.replace("?dl=0","?raw=1").replace("&dl=0","&raw=1").replace("www.dropbox.com","dl.dropboxusercontent.com") : "") || "",
         caption: post.caption || "",
         access_token: token,
         ...(scheduleUnix ? { scheduled_publish_time: scheduleUnix } : {}),
@@ -475,7 +475,7 @@ async function fbPublish(pageId, token, post, scheduleUnix) {
   if (isVideo) {
     endpoint = `${META_API}/${pageId}/videos`;
     body = {
-      file_url: post.videoUrl || "",
+      file_url: (post.videoUrl ? post.videoUrl.replace("?dl=0","?raw=1").replace("&dl=0","&raw=1").replace("www.dropbox.com","dl.dropboxusercontent.com") : "") || "",
       description: post.caption || "",
       access_token: token,
       ...(scheduleUnix ? { published: false, scheduled_publish_time: scheduleUnix } : { published: true }),
@@ -483,7 +483,7 @@ async function fbPublish(pageId, token, post, scheduleUnix) {
   } else {
     endpoint = `${META_API}/${pageId}/photos`;
     body = {
-      url: imgUrl,
+      url: imgUrl ? imgUrl.replace("?dl=0","?raw=1").replace("&dl=0","&raw=1").replace("www.dropbox.com","dl.dropboxusercontent.com") : imgUrl,
       caption: (post.caption || "") + (isCarousel ? "\n\n[Vedi il carousel completo su Instagram]" : ""),
       access_token: token,
       ...(scheduleUnix ? { published: false, scheduled_publish_time: scheduleUnix } : { published: true }),
@@ -2394,10 +2394,38 @@ function FeedWithPreview({ feed, setFeed, schedSave, isAdmin, clienteNome, slug,
   function getCarIdx(id)        { return carouselIdx[id] || 0; }
   function setCarIdx(id, idx)   { setCarouselIdx(prev => ({...prev,[id]:idx})); }
 
+  // Fix Dropbox preview links → raw playable URLs
+  function fixMediaUrl(url) {
+    if (!url) return url;
+    if (url.includes("dropbox.com")) {
+      return url
+        .replace("?dl=0","?raw=1")
+        .replace("&dl=0","&raw=1")
+        .replace("?dl=1","?raw=1")
+        .replace("&dl=1","&raw=1")
+        .replace("www.dropbox.com","dl.dropboxusercontent.com");
+    }
+    return url;
+  }
+
+  // Get the correct aspect ratio CSS string per post type
+  function getAspectRatio(tipo, piattaforme) {
+    const plats = Array.isArray(piattaforme) ? piattaforme : (piattaforme ? [piattaforme] : []);
+    if (tipo === "storia")   return "9/16";
+    if (tipo === "reel")     return "9/16";
+    if (tipo === "carousel") return "1/1";
+    // post: 4:5 for Instagram, 1:1 for others
+    if (plats.includes("instagram") && !plats.includes("facebook") && !plats.includes("linkedin")) return "4/5";
+    return "4/5"; // default safe ratio
+  }
+
   function getMainImg(post) {
-    if (post.tipo === "reel" || post.tipo === "storia") return { src: post.videoUrl||post.videoBase64||post.immagineBase64||post.immagineUrl||null, isVideo: !!(post.videoUrl||post.videoBase64) };
+    if (post.tipo === "reel" || post.tipo === "storia") {
+      const rawUrl = fixMediaUrl(post.videoUrl);
+      return { src: rawUrl||post.videoBase64||post.immagineBase64||fixMediaUrl(post.immagineUrl)||null, isVideo: !!(rawUrl||post.videoBase64) };
+    }
     if (post.tipo === "carousel") {
-      const imgs = post.immagini || [];
+      const imgs = (post.immagini || []).map(fixMediaUrl);
       return { src: imgs[getCarIdx(post.id)] || null, isVideo: false };
     }
     return { src: post.immagineBase64||post.immagineUrl||null, isVideo: false };
@@ -2599,7 +2627,7 @@ function FeedWithPreview({ feed, setFeed, schedSave, isAdmin, clienteNome, slug,
           onClick={e=>e.stopPropagation()}
           onChange={e=>{updPost(post.id,"videoUrl",e.target.value); if(e.target.value) updPost(post.id,"videoBase64","");}}
           style={{...inpF,marginTop:6,fontSize:11,color:C.muted}}/>
-        <div style={{fontSize:9,color:C.muted,marginTop:3}}>Dropbox: modifica link da ?dl=0 a ?raw=1 · Drive: usa link diretto mp4</div>
+        <div style={{fontSize:9,color:C.muted,marginTop:3}}>Dropbox: incolla il link normale — verrà convertito automaticamente ✓</div>
       </div>
     );
   }
@@ -2920,7 +2948,7 @@ function FeedWithPreview({ feed, setFeed, schedSave, isAdmin, clienteNome, slug,
                       const isReel     = post.tipo==="reel";
                       return (
                         <div key={post.id} onClick={()=>{setSelId(isSel?null:post.id);setPreviewPlat(getPiattaforme(post)[0]||"instagram");}}
-                          style={{aspectRatio:"1",position:"relative",cursor:"pointer",overflow:"hidden",outline:isSel?"2.5px solid "+C.verde:"none",outlineOffset:"-2.5px"}}>
+                          style={{aspectRatio:post.tipo==="reel"||post.tipo==="storia"?"9/16":post.tipo==="carousel"?"1/1":"4/5",position:"relative",cursor:"pointer",overflow:"hidden",outline:isSel?"2.5px solid "+C.verde:"none",outlineOffset:"-2.5px"}}>
                           <div style={{position:"absolute",inset:0,background:src?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",display:"flex",alignItems:"center",justifyContent:"center"}}>
                             {isVideo&&src?<video src={src} muted style={{width:"100%",height:"100%",objectFit:"cover"}}/>:src?<img src={src} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}><span style={{fontSize:10,opacity:.5}}>{isReel?"🎬":"📷"}</span><span style={{color:"rgba(255,255,255,.6)",fontSize:5,fontWeight:700,textAlign:"center",padding:"0 2px"}}>{post.titolo}</span></div>}
                           </div>
@@ -6298,12 +6326,13 @@ function ClientApprovalView({ slug }) {
                 {/* immagine / carousel */}
                 <div style={{position:"relative",
                   background:mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
-                  aspectRatio:isStoria?"9/16":"4/3",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  aspectRatio:getAspectRatio(tipo, post.piattaforme||post.piattaforma),
+                  overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
 
                   {/* Carousel viewer */}
                   {isCarousel && carouselImgs.length > 0 ? (
                     <>
-                      <img src={carouselImgs[carIdx]} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                      <img src={fixMediaUrl(carouselImgs[carIdx])} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                       {/* arrows */}
                       {carIdx > 0 && (
                         <button onClick={()=>setCarIdx(c=>c-1)}
@@ -6331,7 +6360,14 @@ function ClientApprovalView({ slug }) {
                       </div>
                     </>
                   ) : mainImg ? (
-                    <img src={mainImg} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    (isReel || isStoria) && (post.videoUrl || post.videoBase64)
+                      ? <video
+                          src={fixMediaUrl(post.videoUrl)||post.videoBase64}
+                          controls
+                          playsInline
+                          style={{width:"100%",height:"100%",objectFit:"cover"}}
+                        />
+                      : <img src={fixMediaUrl(mainImg)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                   ) : (
                     <div style={{textAlign:"center",padding:24}}>
                       <div style={{fontSize:36,marginBottom:8,opacity:.6}}>{isReel?"🎬":isStoria?"📱":"📷"}</div>

@@ -6313,7 +6313,7 @@ function ClientApprovalView({ slug }) {
         <div style={{height:"100%",width:(feed.length?(approved/feed.length*100):0)+"%",background:C.verde,transition:"width .5s"}}/>
       </div>
 
-      <div style={{maxWidth:640,margin:"0 auto",padding:"24px 16px"}}>
+      <div style={{maxWidth:500,margin:"0 auto",padding:"20px 16px"}}>
         {/* intro */}
         <div style={{marginBottom:22}}>
           <h2 style={{margin:"0 0 5px",fontSize:20,fontWeight:800}}>
@@ -6381,7 +6381,7 @@ function ClientApprovalView({ slug }) {
                 <div style={{position:"relative",
                   background:hasVideo||mainImg?"#000":"linear-gradient(135deg,"+(post.colori?.[0]||"#2C3E50")+","+(post.colori?.[1]||"#3498DB")+")",
                   aspectRatio:getAspectRatio(tipo),
-                  maxHeight:(isReel||isStoria)?"70vh":"none",
+                  maxHeight:(isReel||isStoria)?"75vh":isCarousel?"420px":"420px",
                   overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
 
                   {/* Carousel viewer */}
@@ -6422,7 +6422,7 @@ function ClientApprovalView({ slug }) {
                       style={{width:"100%",height:"100%",objectFit:"contain"}}
                     />
                   ) : mainImg ? (
-                    <img src={mainImg} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                    <img src={mainImg} alt="" style={{width:"100%",height:"100%",objectFit:isCarousel?"cover":"contain"}}/>
                   ) : (
                     <div style={{textAlign:"center",padding:24}}>
                       <div style={{fontSize:36,marginBottom:8,opacity:.6}}>{isReel?"🎬":isStoria?"📱":"📷"}</div>
